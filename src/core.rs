@@ -7,7 +7,7 @@ pub const DEFAULT_MAX_BLUR_REGIONS_COUNT: usize = 20;
 /// Add this marker component to a UI Node to indicate that a blur region
 /// should be created behind it.
 #[derive(Component, Reflect, Default, Clone, Copy, PartialEq, Eq)]
-#[reflect(Component, Default)]
+#[reflect(Component, Default, PartialEq)]
 pub struct BlurRegion;
 
 #[derive(Component, Reflect, Clone, Copy)]
