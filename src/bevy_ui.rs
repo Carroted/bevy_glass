@@ -35,7 +35,11 @@ pub fn compute_blur_regions(
 
         let viewport_size = window.size() / ui_scale.0;
 
-        for (node, transform, border_radius, visibility, settings) in &nodes {
+
+        let mut sorted_nodes: Vec<_> = nodes.iter().collect();
+        sorted_nodes.sort_by_key(|(node, ..)| node.stack_index);
+
+        for (node, transform, border_radius, visibility, settings) in sorted_nodes {
             if visibility.get() == false && false {
                 continue;
             }
