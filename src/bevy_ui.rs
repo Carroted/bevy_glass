@@ -38,6 +38,7 @@ pub fn compute_blur_regions(
 
         let mut sorted_nodes: Vec<_> = nodes.iter().collect();
         sorted_nodes.sort_by_key(|(node, ..)| node.stack_index);
+        sorted_nodes.reverse();
 
         for (node, transform, border_radius, visibility, settings) in sorted_nodes {
             if visibility.get() == false && false {
