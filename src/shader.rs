@@ -79,6 +79,12 @@ fn get_shader_handle() -> Handle<Shader> {
     Handle::Uuid(Uuid::from_u128(271147050642476932735403127655134602927), std::marker::PhantomData::default())
 }
 
+fn blur_shader_handle() -> Handle<Shader> {
+    Handle::Uuid(Uuid::from_u128(23994640822013354325), std::marker::PhantomData::default())
+}
+fn id_pass_shader_handle() -> Handle<Shader> {
+    Handle::Uuid(Uuid::from_u128(30310243611322543265), std::marker::PhantomData::default())
+}
 
 pub struct BlurRegionsShaderPlugin;
 

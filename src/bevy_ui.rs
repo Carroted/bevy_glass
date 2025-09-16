@@ -58,7 +58,7 @@ pub fn compute_blur_regions(
                 border_radius.bottom_right,
                 border_radius.bottom_left,
             ]
-            .map(|v| v.resolve(window.scale_factor(), node.size().y * window.scale_factor(), window.size()).unwrap_or(0.0));
+            .map(|v| v.resolve(window.scale_factor(), node.size().y, window.physical_size().as_vec2()).unwrap_or(0.0));
             blur_regions.rounded_blur(region, bevy::prelude::Vec4::from_array(resolved), region_settings);
         }
     }

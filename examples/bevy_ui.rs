@@ -68,8 +68,8 @@ fn setup(mut commands: Commands) {
             border: UiRect::all(Val::Px(5.0)),
             ..default()
         },
-        // BorderColor::all(Color::BLACK),
-        BorderRadius::all(Val::Px(15.0)),
+        BorderColor::all(Color::BLACK),
+        BorderRadius::all(Val::Percent(50.0)),
     ));
 }
 
