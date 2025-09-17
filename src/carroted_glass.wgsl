@@ -39,6 +39,7 @@ struct ComputedBlurRegion {
     displacement_falloff_width: f32,
     specular_intensity: f32,
     reflection_shininess: f32,
+    opacity: f32,
 }
 
 const BLUR_SIZE: f32 = 50.;
@@ -191,6 +192,16 @@ fn horizontal(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     // Checks if we're in any blur region
     for (var i = 0u; i < settings.regions_count; i = i + 1u) {
         let region = blur_regions[i];
+        if (region.opacity == 0.0) {
+            continue; // Skip this region entirely
+        }
+
+        // Broad-phase AABB check
+        if (in.position.x < region.min_x || in.position.x > region.max_x ||
+            in.position.y < region.min_y || in.position.y > region.max_y) {
+            continue;
+        }
+
         let center_px = vec2((region.max_x + region.min_x) * 0.5, (region.max_y + region.min_y) * 0.5);
         let half_size_px = vec2(region.max_x - region.min_x, region.max_y - region.min_y) * 0.5;
 
@@ -221,12 +232,23 @@ fn vertical(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let resolution = vec2<f32>(textureDimensions(screen_texture));
     let pixel_coord = in.position.xy;
     var final_color = textureSample(screen_texture, texture_sampler, in.uv).rgb;
+    var final_alpha = 1.0;
     var processed = false;
 
     for (var i = 0u; i < settings.regions_count; i = i + 1u) {
         if (processed) { break; }
 
         let region = blur_regions[i];
+        if (region.opacity == 0.0) {
+            continue; // Skip this region entirely
+        }
+
+        // Broad-phase AABB check
+        if (in.position.x < region.min_x || in.position.x > region.max_x ||
+            in.position.y < region.min_y || in.position.y > region.max_y) {
+            continue;
+        }
+
         let center_px = vec2((region.max_x + region.min_x) * 0.5, (region.max_y + region.min_y) * 0.5);
         let half_size_px = vec2(region.max_x - region.min_x, region.max_y - region.min_y) * 0.5;
 
@@ -294,8 +316,9 @@ fn vertical(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
             color += vec3(total_reflection);
 
             final_color = color;
+            final_alpha = region.opacity;
         }
     }
 
-    return vec4<f32>(final_color, 1.0);
+    return vec4<f32>(final_color, final_alpha);
 }

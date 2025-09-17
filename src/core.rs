@@ -24,6 +24,7 @@ pub struct BlurRegionSettings {
     pub displacement_falloff_width: f32,
     pub specular_intensity: f32,
     pub reflection_shininess: f32,
+    pub opacity: f32,
 }
 impl Default for BlurRegionSettings {
     fn default() -> Self {
@@ -39,6 +40,7 @@ impl Default for BlurRegionSettings {
             displacement_falloff_width: 70. * 1.1,
             specular_intensity: 3.,
             reflection_shininess: 5.,
+            opacity: 1.0,
         }
     }
 }
@@ -64,6 +66,7 @@ pub struct ComputedBlurRegion {
     displacement_falloff_width: f32,
     pub specular_intensity: f32,
     pub reflection_shininess: f32,
+    pub opacity: f32,
 }
 
 impl ComputedBlurRegion {
@@ -85,6 +88,7 @@ impl ComputedBlurRegion {
         displacement_falloff_width: 0.0,
         specular_intensity: 3.,
         reflection_shininess: 5.,
+        opacity: 1.0,
     };
 }
 
@@ -135,6 +139,7 @@ impl BlurRegionsCamera {
             displacement_falloff_width: settings.displacement_falloff_width,
             specular_intensity: settings.specular_intensity,
             reflection_shininess: settings.reflection_shininess,
+            opacity: settings.opacity,
         });
     }
 
