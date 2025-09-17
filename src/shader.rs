@@ -43,8 +43,10 @@ use bevy::render::render_resource::ShaderStages;
 use bevy::render::render_resource::ShaderType;
 use bevy::render::render_resource::SpecializedRenderPipeline;
 use bevy::render::render_resource::SpecializedRenderPipelines;
+use bevy::render::render_resource::TextureDescriptor;
 use bevy::render::render_resource::TextureFormat;
 use bevy::render::render_resource::TextureSampleType;
+use bevy::render::render_resource::TextureUsages;
 use bevy::render::renderer::RenderContext;
 use bevy::render::renderer::RenderDevice;
 use bevy::render::view::ExtractedView;
@@ -184,67 +186,111 @@ impl ViewNode for BlurRegionsNode {
         (view_target, passes): QueryItem<Self::ViewQuery>,
         world: &World,
     ) -> Result<(), NodeRunError> {
-        let pipeline_cache = world.resource::<PipelineCache>();
         let blur_regions_pipeline = world.resource::<BlurRegionsPipeline>();
-
+        let pipeline_cache = world.resource::<PipelineCache>();
         let buffers = world.resource::<BlurRegionsBuffers>();
-
-        if buffers.regions.get().is_empty() {
-            return Ok(());
-        }
-
+    
+        if buffers.regions.get().is_empty() { return Ok(()); }
         let Some(settings_binding) = buffers.settings.binding() else { return Ok(()); };
         let Some(regions_binding) = buffers.regions.binding() else { return Ok(()); };
-
-        for pass in &passes.0 {
-            let Some(pass_pipeline) = pipeline_cache.get_render_pipeline(pass.pipeline) else { continue; };
-
-            let post_process = view_target.post_process_write();
-
-            let bind_group = render_context.render_device().create_bind_group(
-                pass.bind_group_label,
-                &blur_regions_pipeline.layout,
-                &BindGroupEntries::sequential((
-                    post_process.source,
-                    &blur_regions_pipeline.sampler,
-                    settings_binding.clone(),
-                    regions_binding.clone(),
-                )),
-            );
-            
-            let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
-                label: Some(pass.pass_label),
-                color_attachments: &[Some(RenderPassColorAttachment {
-                    view: post_process.destination,
-                    resolve_target: None,
-                    ops: Operations::default(),
-                    depth_slice: None,
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
-
-            render_pass.set_render_pipeline(pass_pipeline);
-            render_pass.set_bind_group(0, &bind_group, &[]);
-            render_pass.draw(0..3, 0..1);
-        }
-
+    
+        // --- Pass 1: Horizontal ---
+        let horizontal_pass = &passes.0[0];
+        let Some(horizontal_pipeline) = pipeline_cache.get_render_pipeline(horizontal_pass.pipeline) else { return Ok(()); };
+        let source_texture = view_target.main_texture_view();
+    
+        let main_texture = view_target.main_texture();
+        let intermediate_texture_descriptor = TextureDescriptor {
+            label: Some("blur_regions_intermediate_texture"),
+            size: main_texture.size(),
+            mip_level_count: main_texture.mip_level_count(),
+            sample_count: main_texture.sample_count(),
+            dimension: main_texture.dimension(),
+            format: main_texture.format(),
+            usage: main_texture.usage() | TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        };
+        let intermediate_texture = render_context
+            .render_device()
+            .create_texture(&intermediate_texture_descriptor);
+        let intermediate_view = intermediate_texture.create_view(&Default::default());
+        let horizontal_bind_group = render_context.render_device().create_bind_group(
+            horizontal_pass.bind_group_label,
+            &blur_regions_pipeline.horizontal_layout,
+            &BindGroupEntries::sequential((
+                source_texture,
+                &blur_regions_pipeline.sampler,
+                settings_binding.clone(),
+                regions_binding.clone(),
+            )),
+        );
+    
+        let mut horizontal_render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
+            label: Some(horizontal_pass.pass_label),
+            color_attachments: &[Some(RenderPassColorAttachment {
+                view: &intermediate_view,
+                resolve_target: None,
+                ops: Operations::default(),
+                depth_slice: None,
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+        horizontal_render_pass.set_render_pipeline(horizontal_pipeline);
+        horizontal_render_pass.set_bind_group(0, &horizontal_bind_group, &[]);
+        horizontal_render_pass.draw(0..3, 0..1);
+        drop(horizontal_render_pass);
+    
+        // --- Pass 2: Vertical ---
+        let vertical_pass = &passes.0[1];
+        let Some(vertical_pipeline) = pipeline_cache.get_render_pipeline(vertical_pass.pipeline) else { return Ok(()); };
+        let destination_texture = view_target.post_process_write().destination;
+    
+        let vertical_bind_group = render_context.render_device().create_bind_group(
+            vertical_pass.bind_group_label,
+            &blur_regions_pipeline.vertical_layout,
+            &BindGroupEntries::sequential((
+                &intermediate_view,
+                source_texture,
+                &blur_regions_pipeline.sampler,
+                settings_binding.clone(),
+                regions_binding.clone(),
+            )),
+        );
+    
+        let mut vertical_render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
+            label: Some(vertical_pass.pass_label),
+            color_attachments: &[Some(RenderPassColorAttachment {
+                view: destination_texture,
+                resolve_target: None,
+                ops: Operations::default(),
+                depth_slice: None,
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+        vertical_render_pass.set_render_pipeline(vertical_pipeline);
+        vertical_render_pass.set_bind_group(0, &vertical_bind_group, &[]);
+        vertical_render_pass.draw(0..3, 0..1);
+    
         Ok(())
     }
 }
 
 #[derive(Resource)]
 pub struct BlurRegionsPipeline {
-    layout: BindGroupLayout,
+    horizontal_layout: BindGroupLayout,
+    vertical_layout: BindGroupLayout,
     sampler: Sampler,
     fullscreen_shader: FullscreenShader,
 }
 
 impl BlurRegionsPipeline {
     fn new(render_device: RenderDevice, fullscreen_shader: FullscreenShader) -> Self {
-        let layout = render_device.create_bind_group_layout(
-            "blur_regions_bind_group_layout",
+        let horizontal_layout = render_device.create_bind_group_layout(
+            "blur_regions_horizontal_layout",
             &BindGroupLayoutEntries::sequential(
                 ShaderStages::FRAGMENT,
                 (
@@ -255,13 +301,38 @@ impl BlurRegionsPipeline {
                 ),
             ),
         );
+
+        let vertical_layout = render_device.create_bind_group_layout(
+            "blur_regions_vertical_layout",
+            &BindGroupLayoutEntries::sequential(
+                ShaderStages::FRAGMENT,
+                (
+                    // Binding 0: Horizontally Blurred Texture
+                    texture_2d(TextureSampleType::Float { filterable: true }),
+                    // Binding 1: Original Scene Texture
+                    texture_2d(TextureSampleType::Float { filterable: true }),
+                    // Binding 2: Sampler
+                    sampler(SamplerBindingType::Filtering),
+                    // Binding 3: Settings Uniform
+                    uniform_buffer::<GpuBlurRegionsSettings>(false),
+                    // Binding 4: Regions Storage
+                    storage_buffer_read_only::<ComputedBlurRegion>(false),
+                ),
+            ),
+        );
+
         let sampler = render_device.create_sampler(&SamplerDescriptor {
-            address_mode_u: AddressMode::MirrorRepeat,
-            address_mode_v: AddressMode::MirrorRepeat,
+            address_mode_u: AddressMode::ClampToEdge,
+            address_mode_v: AddressMode::ClampToEdge,
             ..default()
         });
 
-        Self { layout, sampler, fullscreen_shader, }
+        Self {
+            horizontal_layout,
+            vertical_layout,
+            sampler,
+            fullscreen_shader,
+        }
     }
 }
 
@@ -317,9 +388,20 @@ impl SpecializedRenderPipeline for BlurRegionsPipeline {
     type Key = BlurRegionsPipelineKey;
 
     fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
+        let (layout, shader_defs) = match key.pass {
+            BlurRegionsPassKey::Horizontal => (
+                self.horizontal_layout.clone(),
+                vec!["HORIZONTAL_PASS".into()],
+            ),
+            BlurRegionsPassKey::Vertical => (
+                self.vertical_layout.clone(),
+                vec!["VERTICAL_PASS".into()],
+            ),
+        };
+
         RenderPipelineDescriptor {
             label: Some("blur_regions_pipeline".into()),
-            layout: vec![self.layout.clone()],
+            layout: vec![layout],
             vertex: self.fullscreen_shader.to_vertex_state(),
             primitive: PrimitiveState::default(),
             depth_stencil: None,
@@ -327,7 +409,7 @@ impl SpecializedRenderPipeline for BlurRegionsPipeline {
             push_constant_ranges: vec![],
             fragment: Some(FragmentState {
                 shader: get_shader_handle(),
-                shader_defs: vec![],
+                shader_defs,
                 entry_point: match key.pass {
                     BlurRegionsPassKey::Horizontal => Some("horizontal".into()),
                     BlurRegionsPassKey::Vertical => Some("vertical".into()),
@@ -338,7 +420,7 @@ impl SpecializedRenderPipeline for BlurRegionsPipeline {
                     } else {
                         TextureFormat::bevy_default()
                     },
-                    blend: Some(BlendState::ALPHA_BLENDING),
+                    blend: None,
                     write_mask: ColorWrites::ALL,
                 })],
             }),

@@ -12,10 +12,20 @@
 
 #import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput
 
-@group(0) @binding(0) var screen_texture: texture_2d<f32>;
-@group(0) @binding(1) var texture_sampler: sampler;
-@group(0) @binding(2) var<uniform> settings: GpuBlurRegionsSettings;
-@group(0) @binding(3) var<storage, read> blur_regions: array<ComputedBlurRegion>;
+#ifdef VERTICAL_PASS
+    // Bindings for the VERTICAL pass
+    @group(0) @binding(0) var h_pass_texture: texture_2d<f32>;
+    @group(0) @binding(1) var original_scene_texture: texture_2d<f32>;
+    @group(0) @binding(2) var texture_sampler: sampler;
+    @group(0) @binding(3) var<uniform> settings: GpuBlurRegionsSettings;
+    @group(0) @binding(4) var<storage, read> blur_regions: array<ComputedBlurRegion>;
+#else // HORIZONTAL_PASS
+    // Bindings for the HORIZONTAL pass
+    @group(0) @binding(0) var screen_texture: texture_2d<f32>;
+    @group(0) @binding(1) var texture_sampler: sampler;
+    @group(0) @binding(2) var<uniform> settings: GpuBlurRegionsSettings;
+    @group(0) @binding(3) var<storage, read> blur_regions: array<ComputedBlurRegion>;
+#endif
 
 struct GpuBlurRegionsSettings {
     circle_of_confusion: f32,
@@ -134,7 +144,13 @@ fn brightnessMatrix(brightness: f32) -> mat4x4<f32> {
 //
 // ATTRIBUTION: This code and comments for this function was originally
 // contributed to bevy under the MIT or Apache 2 licenses.
-fn gaussian_blur(frag_coord: vec4<f32>, coc: f32, frag_offset: vec2<f32>) -> vec3<f32> {
+// Modified to take texture and sampler as parameters.
+fn gaussian_blur(
+    texture: texture_2d<f32>,
+    sampler_in: sampler,
+    frag_coord: vec4<f32>,
+    coc: f32,
+    frag_offset: vec2<f32>) -> vec3<f32> {
     // Usually σ (the standard deviation) is half the radius, and the radius is
     // half the CoC. So we multiply by 0.25.
     let sigma = coc * 0.25;
@@ -142,8 +158,8 @@ fn gaussian_blur(frag_coord: vec4<f32>, coc: f32, frag_offset: vec2<f32>) -> vec
     // 1.5σ is a good, somewhat aggressive default for support—the number of
     // texels on each side of the center that we process.
     let support = i32(ceil(sigma * 1.5));
-    let uv = frag_coord.xy / vec2<f32>(textureDimensions(screen_texture));
-    let offset = frag_offset / vec2<f32>(textureDimensions(screen_texture));
+    let uv = frag_coord.xy / vec2<f32>(textureDimensions(texture));
+    let offset = frag_offset / vec2<f32>(textureDimensions(texture));
 
     // The probability density function of the Gaussian blur is (up to constant factors) `exp(-1 / 2σ² *
     // x²). We precalculate the constant factor here to avoid having to
@@ -152,7 +168,7 @@ fn gaussian_blur(frag_coord: vec4<f32>, coc: f32, frag_offset: vec2<f32>) -> vec
 
     // Accumulate samples on both sides of the current texel. Go two at a time,
     // taking advantage of bilinear filtering.
-    var sum = textureSampleLevel(screen_texture, texture_sampler, uv, 0.0).rgb;
+    var sum = textureSampleLevel(texture, sampler_in, uv, 0.0).rgb;
     var weight_sum = 1.0;
     for (var i = 1; i <= support; i += 2) {
         // This is a well-known trick to reduce the number of needed texture
@@ -175,8 +191,8 @@ fn gaussian_blur(frag_coord: vec4<f32>, coc: f32, frag_offset: vec2<f32>) -> vec
         let weight = w0 + w1;
 
         sum += (
-            textureSampleLevel(screen_texture, texture_sampler, uv + uv_offset, 0.0).rgb +
-            textureSampleLevel(screen_texture, texture_sampler, uv - uv_offset, 0.0).rgb
+            textureSampleLevel(texture, sampler_in, uv + uv_offset, 0.0).rgb +
+            textureSampleLevel(texture, sampler_in, uv - uv_offset, 0.0).rgb
         ) * weight;
         weight_sum += weight * 2.0;
     }
@@ -184,6 +200,7 @@ fn gaussian_blur(frag_coord: vec4<f32>, coc: f32, frag_offset: vec2<f32>) -> vec
     return sum / weight_sum;
 }
 
+#ifdef HORIZONTAL_PASS
 @fragment
 fn horizontal(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let original_color = textureSample(screen_texture, texture_sampler, in.uv);
@@ -219,19 +236,21 @@ fn horizontal(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
 
     if (blurred) {
         // We're in a region, run the horizontal blur
-        let blurred_color = gaussian_blur(in.position, settings.circle_of_confusion, vec2(1.0, 0.0));
+        let blurred_color = gaussian_blur(screen_texture, texture_sampler, in.position, settings.circle_of_confusion, vec2(1.0, 0.0));
         return vec4<f32>(blurred_color, 1.0);
     } else {
         // Not in any region, pass through original color
         return original_color;
     }
 }
+#endif // HORIZONTAL_PASS
 
+#ifdef VERTICAL_PASS
 @fragment
 fn vertical(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
-    let resolution = vec2<f32>(textureDimensions(screen_texture));
+    let resolution = vec2<f32>(textureDimensions(original_scene_texture));
     let pixel_coord = in.position.xy;
-    var final_color = textureSample(screen_texture, texture_sampler, in.uv).rgb;
+    var final_color = textureSample(original_scene_texture, texture_sampler, in.uv).rgb;
     var final_alpha = 1.0;
     var processed = false;
 
@@ -277,8 +296,8 @@ fn vertical(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
             let distorted_position = vec4<f32>(uv2 * resolution, in.position.zw);
 
             // Mix base color
-            let blurred_color = gaussian_blur(distorted_position, settings.circle_of_confusion, vec2(0.0, 1.0));
-            let bg_color = textureSample(screen_texture, texture_sampler, in.uv).rgb;
+            let blurred_color = gaussian_blur(h_pass_texture, texture_sampler, distorted_position, settings.circle_of_confusion, vec2(0.0, 1.0));
+            let bg_color = textureSample(original_scene_texture, texture_sampler, in.uv).rgb;
             var color = mix(bg_color, blurred_color, shape_mask);
             color = (brightnessMatrix(region.extra_brightness) * vec4<f32>(color, 1.0)).xyz;
             color = mix(color, vec3(0.0, 0.0, 0.0), region.black_opacity);
@@ -315,10 +334,11 @@ fn vertical(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
             let total_reflection = (specular_highlight + rim_effect) * light_mask;
             color += vec3(total_reflection);
 
-            final_color = color;
-            final_alpha = region.opacity;
+            final_color = mix(bg_color, color, region.opacity);
+            final_alpha = 1.0;
         }
     }
 
     return vec4<f32>(final_color, final_alpha);
 }
+#endif // VERTICAL_PASS

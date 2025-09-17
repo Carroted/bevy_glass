@@ -2,7 +2,7 @@
 //   cargo run --example bevy_ui
 
 use bevy::prelude::*;
-use bevy_blur_regions::prelude::*;
+use bevy_blur_regions::{prelude::*, BlurRegionSettings};
 
 #[path = "./utils.rs"]
 mod utils;
@@ -51,6 +51,10 @@ fn setup(mut commands: Commands) {
             ..default()
         },
         MovingRegion,
+        BlurRegionSettings {
+            opacity: 0.1,
+            ..Default::default()
+        },
         //BorderColor::all(Color::BLACK),
         //BorderRadius::new(Val::ZERO, Val::Percent(5.0), Val::Percent(10.0), Val::Percent(15.0)),
         BorderRadius::all(Val::Px(30.0)),
