@@ -52,7 +52,8 @@ fn setup(mut commands: Commands) {
         },
         MovingRegion,
         BlurRegionSettings {
-            opacity: 0.1,
+            // opacity: 0.1,
+            blur_only: 1.0,
             ..Default::default()
         },
         //BorderColor::all(Color::BLACK),

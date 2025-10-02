@@ -25,6 +25,7 @@ pub struct BlurRegionSettings {
     pub specular_intensity: f32,
     pub reflection_shininess: f32,
     pub opacity: f32,
+    pub blur_only: f32,
 }
 impl Default for BlurRegionSettings {
     fn default() -> Self {
@@ -41,6 +42,7 @@ impl Default for BlurRegionSettings {
             specular_intensity: 3.,
             reflection_shininess: 5.,
             opacity: 1.0,
+            blur_only: 0.0,
         }
     }
 }
@@ -67,29 +69,11 @@ pub struct ComputedBlurRegion {
     pub specular_intensity: f32,
     pub reflection_shininess: f32,
     pub opacity: f32,
-}
-
-impl ComputedBlurRegion {
-    const OFFSCREEN: ComputedBlurRegion = ComputedBlurRegion {
-        min_x: -1.0,
-        max_x: -1.0,
-        min_y: -1.0,
-        max_y: -1.0,
-        border_radii: Vec4::ZERO,
-
-        glass_brightness: 0.0,
-        shadow_intensity: 0.0,
-        rim_intensity: 0.0,
-        rim_tightness: 0.0,
-        black_opacity: 0.0,
-        extra_brightness: 0.0,
-        light_intensity: 0.0,
-        displacement_falloff_start: 0.0,
-        displacement_falloff_width: 0.0,
-        specular_intensity: 3.,
-        reflection_shininess: 5.,
-        opacity: 1.0,
-    };
+    pub blur_only: f32,
+    // Note: ShaderType derives for WGSL require fields to be 16-byte aligned.
+    // We add padding here to ensure compatibility.
+    _p1: f32,
+    _p2: f32,
 }
 
 //pub type DefaultBlurRegionsCamera = BlurRegionsCamera<DEFAULT_MAX_BLUR_REGIONS_COUNT>;
@@ -126,6 +110,13 @@ impl BlurRegionsCamera {
             max_x: rect.max.x,
             min_y: rect.min.y,
             max_y: rect.max.y,
+            // add 1 to each if nonzero
+            // border_radii: Vec4::new(
+            //     if border_radii.x != 0.0 { border_radii.x + 7.0 } else { 0.0 },
+            //     if border_radii.y != 0.0 { border_radii.y + 7.0 } else { 0.0 },
+            //     if border_radii.z != 0.0 { border_radii.z + 7.0 } else { 0.0 },
+            //     if border_radii.w != 0.0 { border_radii.w + 7.0 } else { 0.0 },
+            // ),
             border_radii,
             // NEW: Assign settings to the computed region.
             glass_brightness: settings.glass_brightness,
@@ -140,6 +131,9 @@ impl BlurRegionsCamera {
             specular_intensity: settings.specular_intensity,
             reflection_shininess: settings.reflection_shininess,
             opacity: settings.opacity,
+            blur_only: settings.blur_only,
+            _p1: 0.0,
+            _p2: 0.0,
         });
     }
 

@@ -50,6 +50,7 @@ struct ComputedBlurRegion {
     specular_intensity: f32,
     reflection_shininess: f32,
     opacity: f32,
+    blur_only: f32,
 }
 
 const BLUR_SIZE: f32 = 50.;
@@ -57,6 +58,8 @@ const BLUR_DIRECTIONS: f32 = 20.0;
 const BLUR_QUALITY: f32 = 20.0;
 const BORDER_SHARPNESS_PX: f32 = 0.75;
 const DISPLACEMENT_SCALE: f32 = 0.5;
+
+const BORDER_INSET_PX: f32 = 1.0;
 
 const SHADOW_DISTANCE_PX: f32 = 40.0;
 
@@ -101,7 +104,8 @@ fn sd_rounded_box_per_corner(p: vec2<f32>, size: vec2<f32>, radii: vec4<f32>) ->
 }
 
 fn create_masks(p: vec2<f32>, half_size: vec2<f32>, radii: vec4<f32>, resolution: vec2<f32>, displacement_falloff_width: f32, displacement_falloff_start: f32) -> vec3<f32> {
-    let dist = sd_rounded_box_per_corner(p, half_size, radii);
+    // let dist = sd_rounded_box_per_corner(p, half_size, radii);
+    let dist = sd_rounded_box_per_corner(p, half_size, radii) + px(BORDER_INSET_PX, resolution);
     let box_shape = smoothstep(px(BORDER_SHARPNESS_PX, resolution), 0.0, dist);
     let box_disp = smoothstep(px(displacement_falloff_width, resolution), 0.0, dist + px(displacement_falloff_start, resolution));
     let box_light = box_shape * smoothstep(0.0, px(30.0, resolution), dist + px(10.0, resolution));
@@ -227,7 +231,8 @@ fn horizontal(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         let half_size_st = half_size_px / resolution.y;
         let radii_st = (region.border_radii) / resolution.y;
 
-        let dist = sd_rounded_box_per_corner(p_relative, half_size_st, radii_st);
+        // let dist = sd_rounded_box_per_corner(p_relative, half_size_st, radii_st);
+        let dist = sd_rounded_box_per_corner(p_relative, half_size_st, radii_st) + px(BORDER_INSET_PX, resolution);
         if (dist <= 0.0) {
             blurred = true;
             break;
@@ -284,55 +289,66 @@ fn vertical(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         if (shape_mask > 0.0) {
             processed = true;
 
-            let disp_mask = masks.y;
-            let light_mask = masks.z;
-
-            // UV displacement
-            let center_uv = center_px / resolution;
-            let uv_from_center = in.uv - center_uv;
-            let scale_factor = (1.0 - DISPLACEMENT_SCALE) + DISPLACEMENT_SCALE * smoothstep(0.5, 1.0, disp_mask);
-            let uv2 = center_uv + uv_from_center * scale_factor;
-
-            let distorted_position = vec4<f32>(uv2 * resolution, in.position.zw);
-
-            // Mix base color
-            let blurred_color = gaussian_blur(h_pass_texture, texture_sampler, distorted_position, settings.circle_of_confusion, vec2(0.0, 1.0));
             let bg_color = textureSample(original_scene_texture, texture_sampler, in.uv).rgb;
-            var color = mix(bg_color, blurred_color, shape_mask);
-            color = (brightnessMatrix(region.extra_brightness) * vec4<f32>(color, 1.0)).xyz;
-            color = mix(color, vec3(0.0, 0.0, 0.0), region.black_opacity);
+            var color: vec3<f32>;
 
-            // Apply brightness
-            color *= region.glass_brightness;
+            // ADD THIS IF/ELSE LOGIC
+            if (region.blur_only > 0.5) {
+                // --- BLUR_ONLY MODE ---
+                // 1. Get blurred color (no distortion)
+                let blurred_color = gaussian_blur(h_pass_texture, texture_sampler, in.position, settings.circle_of_confusion, vec2(0.0, 1.0));
+                // 2. Mix it with the background based on the shape's alpha
+                color = mix(bg_color, blurred_color, shape_mask);
+            } else {
+                let disp_mask = masks.y;
+                let light_mask = masks.z;
 
-            let highlight_boost = light_mask * region.light_intensity;
-            
-            // Calculate both lighting styles
-            let additive_result = color + vec3(highlight_boost);
-            let multiplicative_result = color * (1.0 + highlight_boost);
+                // UV displacement
+                let center_uv = center_px / resolution;
+                let uv_from_center = in.uv - center_uv;
+                let scale_factor = (1.0 - DISPLACEMENT_SCALE) + DISPLACEMENT_SCALE * smoothstep(0.5, 1.0, disp_mask);
+                let uv2 = center_uv + uv_from_center * scale_factor;
 
-            // Blend between the two styles
-            color = mix(additive_result, multiplicative_result, LIGHT_ADAPTIVITY);
+                let distorted_position = vec4<f32>(uv2 * resolution, in.position.zw);
 
-            let shadow_p = p_relative + vec2(0.0, px(SHADOW_DISTANCE_PX, resolution));
-            let shadow_dist = sd_box_sharp(shadow_p, half_size_st);
-            color *= 1.0 - region.shadow_intensity * smoothstep(px(80.0, resolution), 0.0, shadow_dist);
+                // Mix base color
+                let blurred_color = gaussian_blur(h_pass_texture, texture_sampler, distorted_position, settings.circle_of_confusion, vec2(0.0, 1.0));
+                color = mix(bg_color, blurred_color, shape_mask);
+                color = (brightnessMatrix(region.extra_brightness) * vec4<f32>(color, 1.0)).xyz;
+                color = mix(color, vec3(0.0, 0.0, 0.0), region.black_opacity);
 
-                        let normal = get_normal(p_relative, half_size_st, radii_st);
-            let light_dir = normalize(LIGHT_SOURCE_POS - in.uv);
-            let NdotL = max(0.0, dot(normal, light_dir));
+                // Apply brightness
+                color *= region.glass_brightness;
 
-            // Sharp, direct specular highlight
-            let specular_highlight = pow(NdotL, region.reflection_shininess) * region.specular_intensity;
+                let highlight_boost = light_mask * region.light_intensity;
+                
+                // Calculate both lighting styles
+                let additive_result = color + vec3(highlight_boost);
+                let multiplicative_result = color * (1.0 + highlight_boost);
 
-            // Calculate softer rim light
-            // This is brightest on edges perpendicular to the light (grazing angles)
-            // (1.0 - NdotL) is highest where the specular is lowest
-            let rim_effect = pow(1.0 - NdotL, region.rim_tightness) * region.rim_intensity;
+                // Blend between the two styles
+                color = mix(additive_result, multiplicative_result, LIGHT_ADAPTIVITY);
 
-            // Combine both lighting effects and mask them to the border area
-            let total_reflection = (specular_highlight + rim_effect) * light_mask;
-            color += vec3(total_reflection);
+                let shadow_p = p_relative + vec2(0.0, px(SHADOW_DISTANCE_PX, resolution));
+                let shadow_dist = sd_box_sharp(shadow_p, half_size_st);
+                color *= 1.0 - region.shadow_intensity * smoothstep(px(80.0, resolution), 0.0, shadow_dist);
+
+                            let normal = get_normal(p_relative, half_size_st, radii_st);
+                let light_dir = normalize(LIGHT_SOURCE_POS - in.uv);
+                let NdotL = max(0.0, dot(normal, light_dir));
+
+                // Sharp, direct specular highlight
+                let specular_highlight = pow(NdotL, region.reflection_shininess) * region.specular_intensity;
+
+                // Calculate softer rim light
+                // This is brightest on edges perpendicular to the light (grazing angles)
+                // (1.0 - NdotL) is highest where the specular is lowest
+                let rim_effect = pow(1.0 - NdotL, region.rim_tightness) * region.rim_intensity;
+
+                // Combine both lighting effects and mask them to the border area
+                let total_reflection = (specular_highlight + rim_effect) * light_mask;
+                color += vec3(total_reflection);
+            }
 
             final_color = mix(bg_color, color, region.opacity);
             final_alpha = 1.0;

@@ -1,34 +1,32 @@
 #import bevy_core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_out
 #import bevy_render::view::View
 
-struct GpuBlurRegion {
+struct ComputedBlurRegion {
     min_x: f32,
     max_x: f32,
-
     min_y: f32,
     max_y: f32,
-
     border_radii: vec4<f32>,
     glass_brightness: f32,
     shadow_intensity: f32,
-
     rim_intensity: f32,
     rim_tightness: f32,
-
     black_opacity: f32,
     extra_brightness: f32,
-
     light_intensity: f32,
-
     displacement_falloff_start: f32,
     displacement_falloff_width: f32,
-
     specular_intensity: f32,
     reflection_shininess: f32,
+    opacity: f32,
+    // Padding to match Rust struct layout
+    _p1: f32,
+    _p2: f32,
+    _p3: f32,
 }
 
 @group(0) @binding(0) var<uniform> view: View;
-@group(1) @binding(0) var<storage, read> blur_regions: array<GpuBlurRegion>;
+@group(1) @binding(0) var<storage, read> blur_regions: array<ComputedBlurRegion>;
 
 const VERTEX_POSITIONS = array<vec2<f32>, 4>(
     vec2<f32>(-1.0, 1.0),

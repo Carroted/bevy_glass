@@ -17,6 +17,7 @@ bevy_egui = { git = "https://github.com/pindash-io/bevy_egui/", branch = "bevy-0
 
 
 [patch."https://github.com/bevyengine/bevy.git"]
+bevy = { version = "0.17.0-dev", git = "https://github.com/bevyengine/bevy.git?rev=369a760445e93b71711f00cf09da6ab5c0e922a9", rev = "369a760445e93b71711f00cf09da6ab5c0e922a9" }
 
 bevy_a11y = { version = "0.17.0-dev", git = "https://github.com/bevyengine/bevy.git?rev=369a760445e93b71711f00cf09da6ab5c0e922a9", rev = "369a760445e93b71711f00cf09da6ab5c0e922a9" }
 bevy_android = { version = "0.17.0-dev", git = "https://github.com/bevyengine/bevy.git?rev=369a760445e93b71711f00cf09da6ab5c0e922a9", rev = "369a760445e93b71711f00cf09da6ab5c0e922a9" }
@@ -64,6 +65,7 @@ bevy_text = { version = "0.17.0-dev", git = "https://github.com/bevyengine/bevy.
 bevy_time = { version = "0.17.0-dev", git = "https://github.com/bevyengine/bevy.git?rev=369a760445e93b71711f00cf09da6ab5c0e922a9", rev = "369a760445e93b71711f00cf09da6ab5c0e922a9" }
 bevy_transform = { version = "0.17.0-dev", git = "https://github.com/bevyengine/bevy.git?rev=369a760445e93b71711f00cf09da6ab5c0e922a9", rev = "369a760445e93b71711f00cf09da6ab5c0e922a9" }
 bevy_ui = { version = "0.17.0-dev", git = "https://github.com/bevyengine/bevy.git?rev=369a760445e93b71711f00cf09da6ab5c0e922a9", rev = "369a760445e93b71711f00cf09da6ab5c0e922a9" }
+bevy_ui_render = { version = "0.17.0-dev", git = "https://github.com/bevyengine/bevy.git?rev=369a760445e93b71711f00cf09da6ab5c0e922a9", rev = "369a760445e93b71711f00cf09da6ab5c0e922a9" }
 bevy_utils = { version = "0.17.0-dev", git = "https://github.com/bevyengine/bevy.git?rev=369a760445e93b71711f00cf09da6ab5c0e922a9", rev = "369a760445e93b71711f00cf09da6ab5c0e922a9" }
 bevy_window = { version = "0.17.0-dev", git = "https://github.com/bevyengine/bevy.git?rev=369a760445e93b71711f00cf09da6ab5c0e922a9", rev = "369a760445e93b71711f00cf09da6ab5c0e922a9" }
 bevy_winit = { version = "0.17.0-dev", git = "https://github.com/bevyengine/bevy.git?rev=369a760445e93b71711f00cf09da6ab5c0e922a9", rev = "369a760445e93b71711f00cf09da6ab5c0e922a9" }
