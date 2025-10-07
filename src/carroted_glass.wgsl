@@ -65,7 +65,7 @@ const SHADOW_DISTANCE_PX: f32 = 40.0;
 
 const LIGHT_ADAPTIVITY: f32 = 1.0;
 const LIGHT_SOURCE_POS: vec2<f32> = vec2(0.25, -0.1);
-const MAX_REGIONS: u32 = 64u;
+const MAX_REGIONS: u32 = 50u;
 
 fn get_normal(p: vec2<f32>, half_size: vec2<f32>, radii: vec4<f32>) -> vec2<f32> {
     let epsilon = vec2(0.001, 0.0);
