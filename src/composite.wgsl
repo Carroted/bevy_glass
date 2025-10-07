@@ -63,6 +63,7 @@ const DISPLACEMENT_SCALE: f32 = 0.5;
 const SHADOW_DISTANCE_PX: f32 = 40.0;
 const LIGHT_ADAPTIVITY: f32 = 1.0;
 const LIGHT_SOURCE_POS: vec2<f32> = vec2(0.25, -0.1);
+const MAX_REGIONS: u32 = 64u;
 
 // --- Bindings and Structs ---
 @group(0) @binding(0) var original_texture: texture_2d<f32>;
@@ -160,7 +161,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let light_dir = normalize(LIGHT_SOURCE_POS - in.uv);
     let NdotL = max(0.0, dot(normal, light_dir));
     let specular_highlight = pow(NdotL, region.reflection_shininess) * region.specular_intensity;
-    let rim_effect = pow(1.0 - NdotL, region.rim_tightness) * region.rim_intensity;
+    let rim_effect = pow(max(0.0, 1.0 - NdotL), region.rim_tightness) * region.rim_intensity;
     let total_reflection = (specular_highlight + rim_effect) * light_mask;
     color += vec3(total_reflection);
 

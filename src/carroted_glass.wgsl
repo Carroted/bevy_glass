@@ -65,6 +65,7 @@ const SHADOW_DISTANCE_PX: f32 = 40.0;
 
 const LIGHT_ADAPTIVITY: f32 = 1.0;
 const LIGHT_SOURCE_POS: vec2<f32> = vec2(0.25, -0.1);
+const MAX_REGIONS: u32 = 64u;
 
 fn get_normal(p: vec2<f32>, half_size: vec2<f32>, radii: vec4<f32>) -> vec2<f32> {
     let epsilon = vec2(0.001, 0.0);
@@ -259,7 +260,10 @@ fn vertical(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     var final_alpha = 1.0;
     var processed = false;
 
-    for (var i = 0u; i < settings.regions_count; i = i + 1u) {
+    for (var i = 0u; i < MAX_REGIONS; i = i + 1u) {
+        if (i >= settings.regions_count) {
+            break;
+        }
         if (processed) { break; }
 
         let region = blur_regions[i];
@@ -333,7 +337,7 @@ fn vertical(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
                 let shadow_dist = sd_box_sharp(shadow_p, half_size_st);
                 color *= 1.0 - region.shadow_intensity * smoothstep(px(80.0, resolution), 0.0, shadow_dist);
 
-                            let normal = get_normal(p_relative, half_size_st, radii_st);
+                let normal = get_normal(p_relative, half_size_st, radii_st);
                 let light_dir = normalize(LIGHT_SOURCE_POS - in.uv);
                 let NdotL = max(0.0, dot(normal, light_dir));
 
@@ -343,7 +347,7 @@ fn vertical(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
                 // Calculate softer rim light
                 // This is brightest on edges perpendicular to the light (grazing angles)
                 // (1.0 - NdotL) is highest where the specular is lowest
-                let rim_effect = pow(1.0 - NdotL, region.rim_tightness) * region.rim_intensity;
+                let rim_effect = pow(max(0.0, 1.0 - NdotL), region.rim_tightness) * region.rim_intensity;
 
                 // Combine both lighting effects and mask them to the border area
                 let total_reflection = (specular_highlight + rim_effect) * light_mask;
