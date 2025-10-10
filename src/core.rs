@@ -178,7 +178,7 @@ impl Plugin for BlurRegionsPlugin {
         #[cfg(feature = "bevy_ui")]
         app.add_plugins(crate::bevy_ui::BlurRegionsBevyUiPlugin);
 
-        #[cfg(feature = "egui")]
-        app.add_plugins(crate::egui::BlurRegionsEguiPlugin);
+        // #[cfg(feature = "egui")]
+        // app.add_plugins(crate::egui::BlurRegionsEguiPlugin);
     }
 }
